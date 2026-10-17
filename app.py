@@ -32,9 +32,40 @@ def seed():
   cat,warm,mins,veg=infer(str(r['Name'])); rows.append([i+1,r['Name'],r['Rezept-Link'],r['Persönliche Notiz'],cat,warm,mins,veg,False,True,3])
  pd.DataFrame(rows,columns=['ID','Name','Link','Notiz','Kategorie','Warm','Arbeitszeit_Min','Vegetarisch','Favorit','Aktiv','Bewertung']).to_csv(RECIPES,index=False)
 def recipes(): seed(); return pd.read_csv(RECIPES).fillna('')
+def normalize_rules(rs):
+ # Migriert alle bisher verwendeten Regel-Formate auf das aktuelle Listenformat:
+ # [aktiv, modus, max_minuten].
+ defaults=DEFAULT
+ for day in DAYS:
+  day_rules=rs.setdefault(day,{})
+  for meal in MEALS:
+   fallback=defaults[day][meal]
+   r=day_rules.get(meal,fallback)
+   if isinstance(r,dict):
+    active=bool(r.get('active',fallback[0]))
+    mode=r.get('mode',fallback[1])
+    max_minutes=int(r.get('max_minutes',fallback[2]) or 0)
+    day_rules[meal]=[active,mode,max_minutes]
+   elif isinstance(r,(list,tuple)) and len(r)>=3:
+    day_rules[meal]=[bool(r[0]),r[1],int(r[2] or 0)]
+   else:
+    day_rules[meal]=list(fallback)
+ g=rs.setdefault('_global',{})
+ g['cold_min']=int(g.get('cold_min',g.get('cold_weekday_dinners_min',1)))
+ g['cold_max']=int(g.get('cold_max',g.get('cold_weekday_dinners_max',2)))
+ if g['cold_min']>g['cold_max']:
+  g['cold_min'],g['cold_max']=g['cold_max'],g['cold_min']
+ return rs
+
 def rules():
- if not RULES.exists(): RULES.write_text(json.dumps(DEFAULT,ensure_ascii=False,indent=2),encoding='utf-8')
- return json.loads(RULES.read_text(encoding='utf-8'))
+ if not RULES.exists():
+  RULES.write_text(json.dumps(DEFAULT,ensure_ascii=False,indent=2),encoding='utf-8')
+ rs=json.loads(RULES.read_text(encoding='utf-8'))
+ rs=normalize_rules(rs)
+ # Migration dauerhaft speichern, damit Folgeaufrufe dasselbe Format verwenden.
+ RULES.write_text(json.dumps(rs,ensure_ascii=False,indent=2),encoding='utf-8')
+ return rs
+
 def truth(s): return str(s).lower() in ['true','1']
 def pool(df,rule,used,cold=False):
  x=df[df.Aktiv.map(truth)&~df.ID.astype(str).isin({str(i) for i in used})].copy(); mx=int(rule[2])
@@ -57,13 +88,6 @@ def make_plan(df,rs):
  return pd.DataFrame(out,columns=['Tag','Mahlzeit','Rezept','ID','Link','Arbeitszeit','Warm/Kalt'])
 
 st.title('🍽️ Unser Wochenkochplan'); df=recipes(); rs=rules()
-# Migration fuer bestehende rules.json-Dateien aus frueheren App-Versionen.
-# Dadurch funktionieren sowohl cold_min/cold_max als auch die alten Schluessel.
-g=rs.setdefault('_global', {})
-g['cold_min']=int(g.get('cold_min', g.get('cold_weekday_dinners_min', 1)))
-g['cold_max']=int(g.get('cold_max', g.get('cold_weekday_dinners_max', 2)))
-if g['cold_min'] > g['cold_max']:
- g['cold_min'], g['cold_max'] = g['cold_max'], g['cold_min']
 page=st.sidebar.radio('Bereich',['Wochenplan','Rezepte','Regeln'])
 if page=='Wochenplan':
  week=st.date_input('Woche ab Montag',date.today()-timedelta(days=date.today().weekday()))
