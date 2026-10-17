@@ -56,7 +56,15 @@ def make_plan(df,rs):
    used.append(p.ID); out.append([day,meal,p.Name,p.ID,p.Link,f'{int(float(p.Arbeitszeit_Min))} Min.','warm' if truth(p.Warm) else 'kalt'])
  return pd.DataFrame(out,columns=['Tag','Mahlzeit','Rezept','ID','Link','Arbeitszeit','Warm/Kalt'])
 
-st.title('🍽️ Unser Wochenkochplan'); df=recipes(); rs=rules(); page=st.sidebar.radio('Bereich',['Wochenplan','Rezepte','Regeln'])
+st.title('🍽️ Unser Wochenkochplan'); df=recipes(); rs=rules()
+# Migration fuer bestehende rules.json-Dateien aus frueheren App-Versionen.
+# Dadurch funktionieren sowohl cold_min/cold_max als auch die alten Schluessel.
+g=rs.setdefault('_global', {})
+g['cold_min']=int(g.get('cold_min', g.get('cold_weekday_dinners_min', 1)))
+g['cold_max']=int(g.get('cold_max', g.get('cold_weekday_dinners_max', 2)))
+if g['cold_min'] > g['cold_max']:
+ g['cold_min'], g['cold_max'] = g['cold_max'], g['cold_min']
+page=st.sidebar.radio('Bereich',['Wochenplan','Rezepte','Regeln'])
 if page=='Wochenplan':
  week=st.date_input('Woche ab Montag',date.today()-timedelta(days=date.today().weekday()))
  if st.button('✨ Wochenplan erstellen',type='primary') or 'plan' not in st.session_state:st.session_state.plan=make_plan(df,rs)
