@@ -116,8 +116,20 @@ elif page=='Rezepte':
    if final:
     row={'ID':int(pd.to_numeric(df.ID).max())+1,'Name':final,'Link':link,'Notiz':note,'Kategorie':'Hauptgericht','Warm':warm=='warm','Arbeitszeit_Min':mins,'Vegetarisch':True,'Favorit':fav,'Aktiv':True,'Bewertung':3}
     pd.concat([df,pd.DataFrame([row])],ignore_index=True).to_csv(RECIPES,index=False);st.rerun()
- edited=st.data_editor(df,use_container_width=True,hide_index=True,num_rows='dynamic',column_config={'Link':st.column_config.LinkColumn('Link'),'Warm':st.column_config.CheckboxColumn('Warm'),'Vegetarisch':st.column_config.CheckboxColumn('Vegetarisch'),'Favorit':st.column_config.CheckboxColumn('Favorit'),'Aktiv':st.column_config.CheckboxColumn('Aktiv')})
- if st.button('Änderungen speichern',type='primary'):edited.to_csv(RECIPES,index=False);st.success('Gespeichert.')
+ st.subheader(f'Rezeptsammlung ({len(df)})')
+ sort_col, sort_dir = st.columns([3, 1])
+ sortable_columns=['Name','Kategorie','Arbeitszeit_Min','Vegetarisch','Favorit','Aktiv','Bewertung']
+ sort_by=sort_col.selectbox('Sortieren nach',sortable_columns,index=0)
+ ascending=sort_dir.toggle('Aufsteigend',value=True)
+ # Stabile Sortierung: Bei gleichen Werten wird zusätzlich nach Rezeptname sortiert.
+ if sort_by=='Name':
+  shown=df.sort_values('Name',ascending=ascending,kind='stable',key=lambda x:x.astype(str).str.lower())
+ else:
+  shown=df.sort_values([sort_by,'Name'],ascending=[ascending,True],kind='stable')
+ edited=st.data_editor(shown,use_container_width=True,hide_index=True,num_rows='dynamic',column_config={'Link':st.column_config.LinkColumn('Link'),'Warm':st.column_config.CheckboxColumn('Warm'),'Vegetarisch':st.column_config.CheckboxColumn('Vegetarisch'),'Favorit':st.column_config.CheckboxColumn('Favorit'),'Aktiv':st.column_config.CheckboxColumn('Aktiv'),'Bewertung':st.column_config.NumberColumn('Bewertung',min_value=1,max_value=5,step=1),'Arbeitszeit_Min':st.column_config.NumberColumn('Arbeitszeit (Min.)',min_value=5,max_value=180,step=5)})
+ if st.button('Änderungen speichern',type='primary'):
+  edited.to_csv(RECIPES,index=False)
+  st.success('Gespeichert.')
 else:
  st.info('Voreinstellungen entsprechen dem Arbeitsblatt „Hinweise Wochentage“.')
  for day in DAYS:
